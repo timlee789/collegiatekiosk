@@ -22,8 +22,8 @@ export const getKioskData = async () => {
         price, 
         description, 
         image_url, 
-        is_available,
         sort_order,
+        is_available,  
         item_modifier_groups (
           modifier_groups (
             name,
@@ -92,7 +92,8 @@ export const getKioskData = async () => {
         description: item.description,
         image: item.image_url || '/placeholder.png', // 이미지 없으면 기본값
         modifierGroups: modGroups,
-        sort_order: item.sort_order // 순서 정보 저장
+        sort_order: item.sort_order, // 순서 정보
+        is_available: item.is_available // [중요] 품절 여부 연결
       };
 
       allItems.push(menuItem);

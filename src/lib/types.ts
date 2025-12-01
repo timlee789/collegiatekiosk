@@ -20,6 +20,7 @@ export interface MenuItem {
     image?: string;
     modifierGroups: string[]; // Modifier Group 이름 목록
     sort_order?: number;
+    is_available?: boolean;
 }
 
 export interface Category {
