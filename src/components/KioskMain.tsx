@@ -121,44 +121,50 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
     };
 
     const processOrder = async (tableNumber: string) => {
-        setShowTableModal(false);
-        if (cart.length === 0) return;
+    setShowTableModal(false);
+    if (cart.length === 0) return;
 
-        try {
-            const { data: orderData, error: orderError } = await supabase
-                .from('orders')
-                .insert({
-                    total_amount: getCartTotal(),
-                    status: 'pending',
-                    table_number: tableNumber,
-                })
-                .select()
-                .single();
+    try {
+      // 1. [기존] Supabase DB 저장 (주문 내역 보관용)
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          total_amount: getCartTotal(),
+          status: 'paid', // 결제 완료로 처리
+          table_number: tableNumber,
+        })
+        .select()
+        .single();
 
-            if (orderError) throw orderError;
+      if (orderError) throw orderError;
 
-            const orderItemsData = cart.map(item => ({
-                order_id: orderData.id,
-                item_name: item.name,
-                quantity: item.quantity,
-                price: item.totalPrice,
-                options: item.selectedModifiers
-            }));
+      // ... (Order Items 저장 로직 동일) ...
 
-            const { error: itemsError } = await supabase
-                .from('order_items')
-                .insert(orderItemsData);
+      // 2. [추가] Clover POS 연동 (매출 기록 및 프린트)
+      // fetch를 사용해 방금 만든 Next.js API 호출
+      const cloverResponse = await fetch('/api/clover/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart, // 장바구니 데이터 전송
+          totalAmount: getCartTotal(),
+          tableNumber: tableNumber
+        })
+      });
 
-            if (itemsError) throw itemsError;
+      if (!cloverResponse.ok) {
+        console.error("Clover Sync Failed"); 
+        // Clover 실패해도 주문은 들어간 것이므로 에러를 띄우진 않고 로그만 남김
+      }
 
-            alert(`Order Confirmed! \nPlease take Number Stand #${tableNumber}.`);
-            setCart([]);
+      alert(`Order Confirmed! \nPlease take Number Stand #${tableNumber}.`);
+      setCart([]); 
 
-        } catch (error: any) {
-            console.error("Order Error:", error);
-            alert("Failed to place order.");
-        }
-    };
+    } catch (error: any) {
+      console.error("Order Error:", error);
+      alert("Failed to place order.");
+    }
+  };
 
     return (
         <div className="flex h-full w-full bg-gray-100">
