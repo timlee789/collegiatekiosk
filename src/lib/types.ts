@@ -19,6 +19,7 @@ export interface MenuItem {
     description?: string;
     image?: string;
     modifierGroups: string[]; // Modifier Group 이름 목록
+    sort_order?: number;
 }
 
 export interface Category {

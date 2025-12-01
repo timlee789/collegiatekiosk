@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 
 export default function AdminMenuPage() {
-  // [중요] useState로 클라이언트 생성 (세션 유지 및 중복 생성 방지)
   const [supabase] = useState(() => createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -13,23 +12,17 @@ export default function AdminMenuPage() {
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
   const [items, setItems] = useState<any[]>([]);
   
-  // 수정 모드 상태
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>({}); 
 
-  // 초기 데이터 로드
   useEffect(() => {
     fetchCategories();
   }, []);
 
-  // 카테고리 선택 시 아이템 로드
   useEffect(() => {
     if (selectedCatId) fetchItems(selectedCatId);
   }, [selectedCatId]);
 
-  // ---------------------------------------------------------
-  // Data Fetching
-  // ---------------------------------------------------------
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('*').order('sort_order');
     if (data && data.length > 0) {
@@ -38,47 +31,42 @@ export default function AdminMenuPage() {
     }
   };
 
+  // [수정] sort_order 순으로 가져오기
   const fetchItems = async (catId: string) => {
     const { data } = await supabase
       .from('items')
       .select('*')
       .eq('category_id', catId)
-      .order('name');
+      .order('sort_order', { ascending: true }); // 순서대로 정렬
     if (data) setItems(data);
   };
 
-  // ---------------------------------------------------------
-  // Handlers
-  // ---------------------------------------------------------
-
-  // 1. 새 아이템 추가
   const handleAddNewItem = async () => {
     if (!selectedCatId) return;
     const name = prompt("Enter new Item Name:");
     if (!name) return;
 
-    // 식당 ID는 첫 번째 카테고리의 것을 참조하거나, 별도 context에서 가져올 수 있음
-    const restaurantId = categories[0]?.restaurant_id;
+    // 현재 리스트의 가장 큰 순서 번호 찾기
+    const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.sort_order || 0)) : 0;
 
     const { error } = await supabase.from('items').insert({
-      restaurant_id: restaurantId, 
+      restaurant_id: categories[0].restaurant_id, 
       category_id: selectedCatId,
       name: name,
       price: 0,
-      is_available: true
+      is_available: true,
+      sort_order: maxOrder + 1 // 맨 뒤에 추가
     });
 
     if (error) alert("Error adding item: " + error.message);
     else fetchItems(selectedCatId);
   };
 
-  // 2. 수정 모드 진입
   const startEditing = (item: any) => {
     setEditingId(item.id);
     setEditForm({ ...item }); 
   };
 
-  // 3. 저장 (수정 사항 DB 반영)
   const saveItem = async () => {
     if (!editForm.name) return alert("Name is required");
 
@@ -88,7 +76,7 @@ export default function AdminMenuPage() {
         name: editForm.name,
         price: parseFloat(editForm.price) || 0,
         is_available: editForm.is_available,
-        category_id: editForm.category_id // 카테고리 이동 반영
+        category_id: editForm.category_id
       })
       .eq('id', editingId);
 
@@ -96,65 +84,67 @@ export default function AdminMenuPage() {
       alert("Error saving: " + error.message);
     } else {
       setEditingId(null);
-      // 카테고리를 이동했을 수도 있으므로 현재 리스트 갱신
       fetchItems(selectedCatId!);
     }
   };
 
-  // 4. 아이템 삭제
   const handleDeleteItem = async (itemId: string) => {
-    if (!confirm("Are you sure you want to delete this item completely?")) return;
+    if (!confirm("Delete this item?")) return;
     await supabase.from('items').delete().eq('id', itemId);
     fetchItems(selectedCatId!);
   };
 
-  // 5. 이미지 업로드 (컴포넌트 내부에서 직접 처리하여 RLS 문제 해결)
   const handleImageUpload = async (itemId: string, file: File) => {
-    if (!confirm("Upload and replace image?")) return;
-    
-    // 파일명 생성
+    if (!confirm("Upload image?")) return;
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `items/${fileName}`;
 
-    // 인증된 클라이언트로 업로드
     const { error: uploadError } = await supabase.storage
       .from('menu-images')
       .upload(filePath, file);
 
-    if (uploadError) {
-      console.error('Upload Error:', uploadError);
-      alert("Upload Failed: " + uploadError.message);
-      return;
-    }
+    if (uploadError) return alert("Upload Failed: " + uploadError.message);
 
-    // 공개 URL 가져오기
-    const { data: urlData } = supabase.storage
-      .from('menu-images')
-      .getPublicUrl(filePath);
+    const { data: urlData } = supabase.storage.from('menu-images').getPublicUrl(filePath);
 
-    const publicUrl = urlData.publicUrl;
+    await supabase.from('items').update({ image_url: urlData.publicUrl }).eq('id', itemId);
+    alert("Image uploaded!");
+    fetchItems(selectedCatId!);
+  };
 
-    // DB에 이미지 URL 업데이트
-    const { error: dbError } = await supabase
-      .from('items')
-      .update({ image_url: publicUrl })
-      .eq('id', itemId);
-      
-    if (dbError) {
-      alert("DB Update failed: " + dbError.message);
-    } else {
-      alert("Image uploaded successfully!");
-      fetchItems(selectedCatId!);
+  // ---------------------------------------------------------
+  // [New] 아이템 순서 변경 함수
+  // ---------------------------------------------------------
+  const handleMoveItem = async (index: number, direction: 'prev' | 'next') => {
+    if (direction === 'prev' && index === 0) return;
+    if (direction === 'next' && index === items.length - 1) return;
+
+    const targetIndex = direction === 'prev' ? index - 1 : index + 1;
+    
+    // UI 낙관적 업데이트 (즉시 반영)
+    const newItems = [...items];
+    const itemA = newItems[index];
+    const itemB = newItems[targetIndex];
+    
+    newItems[index] = itemB;
+    newItems[targetIndex] = itemA;
+    setItems(newItems);
+
+    // DB 업데이트 (서로의 sort_order 교환)
+    const { error: e1 } = await supabase.from('items').update({ sort_order: itemB.sort_order }).eq('id', itemA.id);
+    const { error: e2 } = await supabase.from('items').update({ sort_order: itemA.sort_order }).eq('id', itemB.id);
+
+    if (e1 || e2) {
+      console.error("Reorder failed", e1, e2);
+      fetchItems(selectedCatId!); // 실패 시 원복
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-50">
       
-      {/* ------------------------------------------- */}
-      {/* 왼쪽: 카테고리 사이드바 */}
-      {/* ------------------------------------------- */}
+      {/* 카테고리 사이드바 */}
       <div className="w-64 bg-white border-r flex flex-col">
         <div className="p-5 border-b bg-gray-100">
           <h2 className="text-lg font-bold text-gray-800">Filter by Category</h2>
@@ -179,18 +169,13 @@ export default function AdminMenuPage() {
         </ul>
       </div>
 
-      {/* ------------------------------------------- */}
-      {/* 오른쪽: 아이템 관리 영역 */}
-      {/* ------------------------------------------- */}
+      {/* 아이템 관리 영역 */}
       <div className="flex-1 p-8 overflow-y-auto">
-        
-        {/* 헤더 */}
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Menu Items</h1>
-            <p className="text-gray-500 text-sm">Manage items in <span className="font-bold text-blue-600">
-              {categories.find(c => c.id === selectedCatId)?.name}
-            </span>
+            <p className="text-gray-500 text-sm">
+              Current Category: <span className="font-bold text-blue-600">{categories.find(c => c.id === selectedCatId)?.name}</span>
             </p>
           </div>
           <button 
@@ -201,7 +186,6 @@ export default function AdminMenuPage() {
           </button>
         </div>
 
-        {/* 아이템 그리드 */}
         {items.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
             <p className="text-gray-400">No items in this category.</p>
@@ -209,7 +193,7 @@ export default function AdminMenuPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {items.map(item => {
+            {items.map((item, index) => { // index 추가
               const isEditing = editingId === item.id;
               const displayData = isEditing ? editForm : item;
 
@@ -217,43 +201,50 @@ export default function AdminMenuPage() {
                 <div key={item.id} className={`bg-white p-5 rounded-2xl shadow-sm border transition-all 
                   ${isEditing ? 'ring-2 ring-blue-500 border-transparent shadow-xl z-10 scale-[1.02]' : 'border-gray-200'}`}>
                   
-                  {/* 1. 이미지 영역 (1:1 정사각형 비율 aspect-square) */}
+                  {/* [New] 순서 변경 버튼 (카드 상단) */}
+                  {!isEditing && (
+                    <div className="flex justify-between mb-2">
+                       <button 
+                         onClick={() => handleMoveItem(index, 'prev')}
+                         disabled={index === 0}
+                         className="text-gray-400 hover:text-blue-600 disabled:opacity-20 text-lg font-bold px-2"
+                         title="Move Left/Up"
+                       >
+                         ◀
+                       </button>
+                       <span className="text-xs text-gray-300 pt-1">Order: {item.sort_order}</span>
+                       <button 
+                         onClick={() => handleMoveItem(index, 'next')}
+                         disabled={index === items.length - 1}
+                         className="text-gray-400 hover:text-blue-600 disabled:opacity-20 text-lg font-bold px-2"
+                         title="Move Right/Down"
+                       >
+                         ▶
+                       </button>
+                    </div>
+                  )}
+
+                  {/* 이미지 영역 */}
                   <div className="aspect-square bg-gray-100 rounded-xl relative overflow-hidden group mb-4 flex items-center justify-center">
                      {displayData.image_url ? (
                        <img 
                         src={displayData.image_url} 
                         alt={displayData.name} 
                         className="w-full h-full object-cover" 
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          e.currentTarget.parentElement?.classList.add('bg-gray-200'); // 에러 시 배경색
-                        }}
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
                        />
                      ) : (
                        <span className="text-gray-400 text-sm font-bold">No Image</span>
                      )}
                      
-                     {/* 이미지가 없을 때 텍스트 표시 */}
-                     <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm font-bold -z-10">
-                        No Image
-                     </div>
-
-                     {/* 이미지 업로드 오버레이 */}
                      <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white font-bold text-sm z-20">
                        Change Photo
-                       <input 
-                        type="file" 
-                        className="hidden" 
-                        accept="image/*" 
-                        onChange={(e) => e.target.files?.[0] && handleImageUpload(item.id, e.target.files[0])} 
-                       />
+                       <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(item.id, e.target.files[0])} />
                      </label>
                   </div>
 
-                  {/* 2. 입력 폼 영역 */}
+                  {/* 입력 폼 */}
                   <div className="space-y-3">
-                    
-                    {/* 카테고리 이동 (수정 모드일 때만 표시) */}
                     {isEditing && (
                       <div className="bg-yellow-50 p-2 rounded border border-yellow-200">
                         <label className="text-xs text-gray-500 font-bold uppercase block mb-1">Move Category</label>
@@ -269,7 +260,6 @@ export default function AdminMenuPage() {
                       </div>
                     )}
 
-                    {/* 이름 입력 */}
                     <div>
                       <label className="text-xs text-gray-400 font-bold uppercase">Item Name</label>
                       <input 
@@ -282,7 +272,6 @@ export default function AdminMenuPage() {
                       />
                     </div>
                     
-                    {/* 가격 및 품절 관리 */}
                     <div className="flex justify-between gap-4">
                        <div className="flex-1">
                           <label className="text-xs text-gray-400 font-bold uppercase">Price ($)</label>
@@ -311,7 +300,7 @@ export default function AdminMenuPage() {
                     </div>
                   </div>
 
-                  {/* 3. 액션 버튼 (Edit / Save / Cancel / Delete) */}
+                  {/* 버튼 영역 */}
                   <div className="mt-6 pt-4 border-t flex justify-between items-center">
                     {isEditing ? (
                       <>
