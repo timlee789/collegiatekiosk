@@ -13,52 +13,53 @@ const headers = {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, totalAmount, tableNumber } = body; // 키오스크에서 보낸 데이터
+    const { items, totalAmount, tableNumber } = body;
 
-    // 1. 주문(Order) 생성
-    // title에 테이블 번호를 넣으면 주방에서 보기 편합니다.
+    // 1. URL 유효성 검사 로그
+    if (!CLOVER_URL || !MID || !TOKEN) {
+      console.error("Missing Clover Env Variables");
+      throw new Error("Missing Clover configuration");
+    }
+
+    // 2. 주문(Order) 생성
+    // state: 'OPEN'으로 설정하여 POS의 Open Orders 탭에 뜨게 함
     const orderRes = await axios.post(`${CLOVER_URL}/v3/merchants/${MID}/orders`, {
       state: 'OPEN',
-      title: tableNumber ? `Table #${tableNumber}` : 'Kiosk Order',
-      total: Math.round(totalAmount * 100), // 센트 단위 변환
-      manualTransaction: true // 외부 결제임을 명시
+      title: tableNumber ? `Table #${tableNumber} (Kiosk)` : 'Kiosk Order',
+      total: Math.round(totalAmount * 100),
+      manualTransaction: false
     }, { headers });
 
     const orderId = orderRes.data.id;
     console.log(`✅ Clover Order Created: ${orderId}`);
 
-    // 2. 아이템(Line Items) 추가
-    // Clover는 아이템을 하나씩 추가해야 합니다 (Promise.all로 병렬 처리)
+    // 3. 아이템(Line Items) 추가
     const lineItemPromises = items.map((item: any) => {
       return axios.post(`${CLOVER_URL}/v3/merchants/${MID}/orders/${orderId}/line_items`, {
         name: item.name,
         price: Math.round(item.price * 100),
         quantity: item.quantity
-        // 만약 Clover Inventory의 item id를 안다면 { item: { id: "CLOVER_ITEM_ID" } } 로 보내야 재고 연동됨
-        // 여기서는 "Custom Item"으로 이름만 기록합니다.
       }, { headers });
     });
 
     await Promise.all(lineItemPromises);
+    console.log(`✅ Items added to Clover Order`);
 
-    // 3. 옵션(Modifiers) 추가 (심화 단계 - 일단 생략 가능, 필요시 로직 추가)
-    // (옵션까지 완벽히 넣으려면 코드가 길어지므로, 일단 메뉴 이름에 옵션을 붙여서 보내는 꼼수를 추천합니다. 예: "Burger (No Onion)")
-
-    // 4. 결제 기록 (External Payment) - 매출 잡기
-    await axios.post(`${CLOVER_URL}/v3/merchants/${MID}/orders/${orderId}/payments`, {
-      tender: { label: "Stripe Kiosk" }, // 나중에 리포트에서 'Stripe Kiosk'로 매출 구분됨
-      amount: Math.round(totalAmount * 100),
-      result: "SUCCESS"
-    }, { headers });
-
-    // 5. [중요] 프린트 요청 (Fire Print Event)
-    // Clover 기기에게 "이 주문 출력해!"라고 명령
-    await axios.post(`${CLOVER_URL}/v3/merchants/${MID}/orders/${orderId}/prints`, {}, { headers });
+    // [수정됨] 프린트 강제 요청 코드 삭제 (405 에러 원인 제거)
+    // Clover Cloud API 특성상 주문이 'Open' 상태로 들어가면, 
+    // POS 기기에서 직원이 해당 주문을 클릭하거나 'Fire'를 눌렀을 때 주방 프린터가 작동합니다.
 
     return NextResponse.json({ success: true, orderId });
 
   } catch (error: any) {
-    console.error('Clover API Error:', error.response?.data || error.message);
+    console.error('❌ Clover API Error Details:');
+    if (error.response) {
+        console.error(`- Status: ${error.response.status}`);
+        console.error(`- Data: ${JSON.stringify(error.response.data)}`);
+    } else {
+        console.error(`- Message: ${error.message}`);
+    }
+    
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

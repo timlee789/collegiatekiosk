@@ -46,3 +46,10 @@ body {
   color: #1f2937;
   /* Tailwind gray-800 와 동일 (진한 회색) */
 }
+
+/* [New] 1920x1080 해상도 대응 (기본 16px -> 12px로 75% 축소) */
+@media (max-width: 1920px) {
+  html {
+    font-size: 12px;
+  }
+}
