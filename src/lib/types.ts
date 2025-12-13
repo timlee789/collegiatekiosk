@@ -21,6 +21,8 @@ export interface MenuItem {
     modifierGroups: string[]; // Modifier Group 이름 목록
     sort_order?: number;
     is_available?: boolean;
+    clover_id?: string;
+    pos_name?: string;
 }
 
 export interface Category {

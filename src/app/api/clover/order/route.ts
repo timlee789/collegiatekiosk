@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 
+// 환경 변수 로드
 const CLOVER_URL = process.env.CLOVER_API_URL;
 const MID = process.env.CLOVER_MERCHANT_ID;
 const TOKEN = process.env.CLOVER_API_TOKEN;
+const TENDER_ID = process.env.CLOVER_TENDER_ID;
+
+const ORDER_TYPE_DINE_IN = process.env.CLOVER_ORDER_TYPE_DINE_IN;
+const ORDER_TYPE_TO_GO = process.env.CLOVER_ORDER_TYPE_TO_GO;
 
 const headers = {
   'Authorization': `Bearer ${TOKEN}`,
@@ -13,53 +18,72 @@ const headers = {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, totalAmount, tableNumber } = body;
+    const { items, totalAmount, tableNumber, orderType } = body;
 
-    // 1. URL 유효성 검사 로그
-    if (!CLOVER_URL || !MID || !TOKEN) {
-      console.error("Missing Clover Env Variables");
-      throw new Error("Missing Clover configuration");
+    // 1. 주문 유형(Order Type) 결정
+    let selectedOrderTypeId = ORDER_TYPE_DINE_IN; 
+    if (orderType === 'to_go') {
+        selectedOrderTypeId = ORDER_TYPE_TO_GO;
     }
 
-    // 2. 주문(Order) 생성
-    // state: 'OPEN'으로 설정하여 POS의 Open Orders 탭에 뜨게 함
-    const orderRes = await axios.post(`${CLOVER_URL}/v3/merchants/${MID}/orders`, {
-      state: 'OPEN',
-      title: tableNumber ? `Table #${tableNumber} (Kiosk)` : 'Kiosk Order',
+    console.log(`🚀 Clover Order Sync: Table ${tableNumber} | Type: ${orderType}`);
+
+    // [Step 1] 주문(Order) 생성
+    const orderRes = await axios.post<any>(`${CLOVER_URL}/v3/merchants/${MID}/orders`, {
+      state: 'open',
+      title: tableNumber ? `Table #${tableNumber}` : 'Kiosk Order',
       total: Math.round(totalAmount * 100),
-      manualTransaction: false
+      manualTransaction: false,
+      orderType: selectedOrderTypeId ? { id: selectedOrderTypeId } : undefined
     }, { headers });
-
+    
     const orderId = orderRes.data.id;
-    console.log(`✅ Clover Order Created: ${orderId}`);
 
-    // 3. 아이템(Line Items) 추가
+    // [Step 2] 아이템 추가 (ID 기반으로 심플하게)
     const lineItemPromises = items.map((item: any) => {
-      return axios.post(`${CLOVER_URL}/v3/merchants/${MID}/orders/${orderId}/line_items`, {
-        name: item.name,
-        price: Math.round(item.price * 100),
-        quantity: item.quantity
-      }, { headers });
+      let payload: any = {
+        unitQty: item.quantity || 1, 
+      };
+
+      // DB에 정확한 Clover ID가 있으므로 ID만 보내면 됩니다.
+      if (item.clover_id) {
+        payload.item = { id: item.clover_id };
+      } else {
+        // ID가 없는 경우에만 이름 사용 (예외 처리)
+        payload.name = item.name;
+        payload.price = Math.round(item.price * 100);
+      }
+
+      return axios.post(`${CLOVER_URL}/v3/merchants/${MID}/orders/${orderId}/line_items`, 
+        payload, 
+        { headers }
+      );
     });
 
     await Promise.all(lineItemPromises);
-    console.log(`✅ Items added to Clover Order`);
 
-    // [수정됨] 프린트 강제 요청 코드 삭제 (405 에러 원인 제거)
-    // Clover Cloud API 특성상 주문이 'Open' 상태로 들어가면, 
-    // POS 기기에서 직원이 해당 주문을 클릭하거나 'Fire'를 눌렀을 때 주방 프린터가 작동합니다.
+    // [Step 3] 결제(Payment) 기록
+    await axios.post(`${CLOVER_URL}/v3/merchants/${MID}/orders/${orderId}/payments`, {
+      tender: { id: TENDER_ID },
+      amount: Math.round(totalAmount * 100),
+      result: "SUCCESS",
+      tipAmount: 0,
+      externalPaymentId: `KIOSK-${Date.now()}`
+    }, { headers });
 
+    // [Step 4] 주문 완료 처리 (Locked) - 매출 확정용
+    await axios.post(`${CLOVER_URL}/v3/merchants/${MID}/orders/${orderId}`, 
+        { state: 'locked' }, 
+        { headers }
+    );
+
+    console.log(`✅ Clover Sync Complete (ID: ${orderId})`);
+    
+    // 성공 시 Clover Order ID를 반환 (프린터에 찍기 위해)
     return NextResponse.json({ success: true, orderId });
 
   } catch (error: any) {
-    console.error('❌ Clover API Error Details:');
-    if (error.response) {
-        console.error(`- Status: ${error.response.status}`);
-        console.error(`- Data: ${JSON.stringify(error.response.data)}`);
-    } else {
-        console.error(`- Message: ${error.message}`);
-    }
-    
+    console.error('❌ Clover Sync Failed:', error.message);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
