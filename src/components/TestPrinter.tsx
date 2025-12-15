@@ -6,48 +6,59 @@ export default function TestPrinter() {
   const [status, setStatus] = useState('Idle');
 
   const handleTestPrint = async () => {
-    setStatus('Printing...');
+    setStatus('Sending...');
     
-    // 더미 데이터 (테스트용)
-    const testData = {
-      tableNumber: "999",
+    // 주방 프린터 테스트용 가짜 데이터
+    const testPayload = {
+      tableNumber: "TEST-01",
+      orderId: "TEST-9999",
       items: [
-        { name: "Test Burger", pos_name: "TST-BGR", quantity: 1, options: [] },
-        { name: "Spicy Fries", pos_name: "SP-FF", quantity: 2, options: [{ name: "No Salt" }] }
+        { 
+          name: "Test Burger", 
+          pos_name: "TST-BGR", // 약자 테스트
+          quantity: 1, 
+          selectedModifiers: [{ name: "No Onion" }] // 빨간색 출력 테스트
+        },
+        { 
+          name: "French Fries", 
+          pos_name: "FF", 
+          quantity: 2, 
+          selectedModifiers: [] 
+        }
       ]
     };
 
     try {
-      // 내 PC(Localhost)에 떠있는 중계 서버(4000번 포트)로 요청
+      // 로컬 프린터 서버로 직접 전송
       const res = await fetch('http://localhost:4000/print', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(testData)
+        body: JSON.stringify(testPayload)
       });
 
       if (res.ok) {
-        setStatus('✅ Success!');
-        alert("프린터에서 종이가 나오는지 확인하세요!");
+        setStatus('✅ OK');
+        alert("🖨️ 프린터에서 종이가 나오는지 확인하세요!");
       } else {
-        setStatus('❌ Failed');
-        alert("프린터 연결 실패. server.js가 켜져 있나요?");
+        setStatus('❌ Fail');
+        alert("서버에는 연결됐지만 프린터 에러가 났습니다.");
       }
     } catch (error) {
       console.error(error);
       setStatus('❌ Error');
-      alert("로컬 서버(localhost:4000)에 연결할 수 없습니다.");
+      alert("로컬 서버(localhost:4000)가 켜져 있는지 확인하세요.");
     }
     
     setTimeout(() => setStatus('Idle'), 2000);
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    <div className="fixed bottom-10 left-10 z-50">
       <button 
         onClick={handleTestPrint}
-        className="bg-gray-800 text-white px-4 py-2 rounded-full shadow-lg font-bold hover:bg-gray-700 text-sm"
+        className="bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl font-bold hover:bg-red-700 text-lg border-4 border-white"
       >
-        🖨️ Test Kitchen Print ({status})
+        🖨️ Test Print ({status})
       </button>
     </div>
   );
