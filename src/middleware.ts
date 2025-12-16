@@ -1,6 +1,6 @@
 // src/middleware.ts
 import { type NextRequest } from 'next/server';
-import { updateSession } from '@/utils/supabase/middleware';
+import { updateSession } from '@/utils/supabase/server-client';
 
 export async function middleware(request: NextRequest) {
     // Supabase 세션 체크 및 쿠키 갱신
