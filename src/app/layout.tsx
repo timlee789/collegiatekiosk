@@ -24,7 +24,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${nunito.className} antialiased`}>
         {children}
-        <TestPrinter /> {/* 👈 2. 여기에 추가 (화면 구석에 뜹니다) */}
+        {/* 👈 2. 여기에 추가 (화면 구석에 뜹니다) */}
       </body>
     </html>
   );

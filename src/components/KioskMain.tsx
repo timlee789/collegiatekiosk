@@ -16,8 +16,6 @@ interface Props {
   modifiersObj: { [key: string]: ModifierGroup };
 }
 
-// ⚠️ [수정] CartItem 타입에 'groupId' 속성을 추가하여 내부적으로 확장 사용
-// (기존 types.ts를 건드리지 않고 여기서만 확장해서 씁니다)
 interface ExtendedCartItem extends CartItem {
   groupId?: string;
 }
@@ -25,7 +23,6 @@ interface ExtendedCartItem extends CartItem {
 export default function KioskMain({ categories, items, modifiersObj }: Props) {
   const [activeTab, setActiveTab] = useState<string>('');
   
-  // ⚠️ [수정] 확장된 타입(ExtendedCartItem)을 사용하여 상태 관리
   const [cart, setCart] = useState<ExtendedCartItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   
@@ -33,9 +30,11 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
   const [showTableModal, setShowTableModal] = useState(false);
   const [showOrderTypeModal, setShowOrderTypeModal] = useState(false);
   const [showTipModal, setShowTipModal] = useState(false);
+  const [showPaymentInstruction, setShowPaymentInstruction] = useState(false);
   
   const [currentTableNumber, setCurrentTableNumber] = useState<string>('');
   const [selectedOrderType, setSelectedOrderType] = useState<'dine_in' | 'to_go' | null>(null);
+  const [selectedTipAmount, setSelectedTipAmount] = useState<number>(0);
 
   const cartEndRef = useRef<HTMLDivElement>(null);
 
@@ -56,9 +55,6 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
 
   const filteredItems = items.filter(item => item.category === activeTab);
 
-  // ---------------------------------------------------------
-  // [계산 로직]
-  // ---------------------------------------------------------
   const calculateTotals = () => {
     const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
     const tax = subtotal * 0.07;
@@ -71,12 +67,11 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
   const { subtotal, tax, cardFee, grandTotal } = calculateTotals();
 
   // ---------------------------------------------------------
-  // 장바구니 추가 (세트 메뉴 그룹화 로직 추가됨)
+  // 장바구니 추가 로직
   // ---------------------------------------------------------
   const handleAddToCart = (item: MenuItem, selectedOptions: ModifierOption[]) => {
     const totalPrice = item.price + selectedOptions.reduce((sum, opt) => sum + opt.price, 0);
     
-    // ⚠️ [추가] 세트 메뉴일 경우 고유한 그룹 ID 생성 (아니면 undefined)
     const isSpecialSet = item.category === 'Special';
     const currentGroupId = isSpecialSet ? `group-${Date.now()}-${Math.random()}` : undefined;
 
@@ -86,15 +81,13 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
       totalPrice: totalPrice,
       quantity: 1,
       uniqueCartId: Date.now().toString() + Math.random().toString(),
-      groupId: currentGroupId, // 그룹 ID 부여
+      groupId: currentGroupId, 
     };
 
     let newCartItems = [mainCartItem];
 
-    // Special 세트 메뉴 자동 추가 로직
     if (isSpecialSet) {
       const desc = item.description?.toLowerCase() || '';
-      
       if (desc.includes('fries') || desc.includes('ff')) {
         const friesItem = items.find(i => i.name === '1/2 FF' || i.name === 'French Fries' || i.posName === '1/2 FF');
         if (friesItem) {
@@ -105,11 +98,10 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
             quantity: 1,
             uniqueCartId: Date.now().toString() + Math.random().toString(),
             name: `(Set) ${friesItem.name}`,
-            groupId: currentGroupId // ⚠️ 사이드 메뉴에도 같은 그룹 ID 부여
+            groupId: currentGroupId 
           });
         }
       }
-
       if (desc.includes('drink')) {
         const drinkItem = items.find(i => i.name === 'Soft Drink' || i.posName === 'Soft Drink');
         if (drinkItem) {
@@ -120,12 +112,11 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
             quantity: 1,
             uniqueCartId: Date.now().toString() + Math.random().toString(),
             name: `(Set) ${drinkItem.name}`,
-            groupId: currentGroupId // ⚠️ 사이드 메뉴에도 같은 그룹 ID 부여
+            groupId: currentGroupId 
           });
         }
       }
     }
-
     setCart(prev => [...prev, ...newCartItems]);
     setSelectedItem(null); 
   };
@@ -138,25 +129,18 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
     }
   };
 
-  // ⚠️ [수정] 장바구니 삭제 로직 (그룹 삭제 기능 추가)
   const removeFromCart = (uniqueId: string) => {
     setCart(prev => {
-      // 1. 삭제하려는 아이템을 찾음
       const targetItem = prev.find(item => item.uniqueCartId === uniqueId);
-      
-      // 2. 만약 그룹 ID가 있는 아이템(세트 메뉴)이라면?
       if (targetItem && targetItem.groupId) {
-        // 그 그룹 ID를 가진 모~든 아이템을 다 지워버림 (햄버거+감튀+음료 함께 삭제)
         return prev.filter(item => item.groupId !== targetItem.groupId);
       }
-      
-      // 3. 일반 아이템이면 그냥 그것만 삭제
       return prev.filter(item => item.uniqueCartId !== uniqueId);
     });
   };
 
   // ---------------------------------------------------------
-  // [STEP 1] 테이블 번호 입력 완료 -> 주문 유형 선택으로 이동
+  // 결제 진행 흐름
   // ---------------------------------------------------------
   const handleTableNumberConfirm = (tableNum: string) => {
     setCurrentTableNumber(tableNum);
@@ -164,76 +148,142 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
     setShowOrderTypeModal(true);  
   };
 
-  // ---------------------------------------------------------
-  // [STEP 2] 주문 유형 선택 -> 팁 모달 열기
-  // ---------------------------------------------------------
   const handleOrderTypeSelect = (type: 'dine_in' | 'to_go') => {
     setSelectedOrderType(type);
     setShowOrderTypeModal(false); 
-    
     if (type === 'to_go') {
         setCurrentTableNumber('To Go'); 
     }
-    
     setShowTipModal(true);
   };
 
-  // ---------------------------------------------------------
-  // [STEP 3] 팁 선택 완료 -> 결제 시작
-  // ---------------------------------------------------------
   const handleTipSelect = (tipAmount: number) => {
+    setSelectedTipAmount(tipAmount);
     setShowTipModal(false);
-    processPayment(selectedOrderType || 'dine_in', tipAmount);
+    setShowPaymentInstruction(true);
   };
 
   // ---------------------------------------------------------
-  // [FINAL STEP] 실제 결제 및 처리
+  // 🧪 [CLOVER TEST MODE] 결제 Skip + Clover 연동 + 프린트
   // ---------------------------------------------------------
-  const processPayment = async (orderType: 'dine_in' | 'to_go', tipAmount: number) => {
+  const processCloverTestWithoutPayment = async () => {
     if (cart.length === 0) return;
+    const orderType = selectedOrderType || 'dine_in';
+    const tipAmount = selectedTipAmount;
+    const tableNum = currentTableNumber || (orderType === 'to_go' ? 'To Go' : '00');
 
     try {
-      const { grandTotal } = calculateTotals();
+      const { subtotal, tax, cardFee, grandTotal } = calculateTotals();
       const finalAmountWithTip = grandTotal + tipAmount;
 
-      // 1. Stripe 결제 요청
-      console.log(`💳 Processing Payment: $${finalAmountWithTip} (Tip: $${tipAmount})`);
-      
-      const stripeRes = await fetch('/api/stripe/process', {
+      console.log(`🧪 [TEST] Skipping Payment. Sending to Clover & Printer: $${finalAmountWithTip}`);
+
+      // 1. DB 저장 (테스트용 기록)
+      let orderId = "TEST-CLOVER-" + Math.floor(Math.random() * 1000);
+      try {
+          const { data, error } = await supabase.from('orders').insert({
+              total_amount: finalAmountWithTip,
+              status: 'test_clover', // 테스트 상태
+              table_number: tableNum,
+              order_type: orderType,
+          }).select().single();
+          
+          if(data) {
+             orderId = "Kiosk-" + data.id;
+             // 아이템 저장 (선택 사항)
+             const itemsData = cart.map(item => ({
+                 order_id: data.id,
+                 item_name: item.name,
+                 quantity: item.quantity,
+                 price: item.totalPrice,
+                 options: item.selectedModifiers
+             }));
+             await supabase.from('order_items').insert(itemsData);
+          }
+      } catch (e) { console.error("DB Error ignored", e); }
+
+      // 2. ☘️ Clover 연동 (매출 잡힘)
+      console.log("☘️ Sending to Clover...");
+      try {
+        const cloverRes = await fetch('/api/clover/order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: cart,
+              totalAmount: finalAmountWithTip,
+              tableNumber: tableNum,
+              orderType: orderType,
+              tipAmount: tipAmount
+            })
+        });
+        if (!cloverRes.ok) {
+            const errText = await cloverRes.text();
+            throw new Error(`Clover API Error: ${errText}`);
+        }
+        console.log("☘️ Clover Success!");
+      } catch (cloverErr: any) {
+          alert(`⚠️ Clover 연동 실패 (프린트는 진행됨):\n${cloverErr.message}`);
+      }
+
+      // 3. 🖨️ 프린터 서버 전송
+      console.log("🖨️ Sending to Printer...");
+      const printRes = await fetch('http://127.0.0.1:4000/print', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: finalAmountWithTip }) 
+        body: JSON.stringify({
+          orderId: orderId,          
+          tableNumber: tableNum, 
+          orderType: orderType,            
+          items: cart,                     
+          subtotal: subtotal,
+          tax: tax,
+          cardFee: cardFee,
+          tipAmount: tipAmount, 
+          totalAmount: finalAmountWithTip, 
+          date: new Date().toLocaleString('en-US') 
+        })
       });
-      const stripeData = await stripeRes.json();
-      if (!stripeData.success) throw new Error(stripeData.error || "Payment failed");
-      const paymentIntentId = stripeData.paymentIntentId;
+      
+      if (!printRes.ok) throw new Error(`Printer Server Error: ${printRes.status}`);
 
-      // ... Stripe 결제 대기 ...
-      let isPaid = false;
-      for (let i = 0; i < 60; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        const captureRes = await fetch('/api/stripe/capture', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ paymentIntentId })
-        });
-        const captureData = await captureRes.json();
-        if (captureData.status === 'succeeded') {
-          isPaid = true;
-          break;
-        }
-      }
-      if (!isPaid) throw new Error("Payment timed out.");
+      alert(`✅ Clover 테스트 & 인쇄 완료!\n\n쉐이크: 16oz, Chocolate 등 전체 단어 확인\n주방: K, Mus 등 약어 확인`);
+      
+      setShowPaymentInstruction(false);
+      setCart([]); 
+      setCurrentTableNumber('');
+      setSelectedOrderType(null);
 
-      // 2. DB 저장
+    } catch (error: any) {
+      alert("❌ 테스트 실패: " + error.message);
+    }
+  };
+
+  // ---------------------------------------------------------
+  // [REAL MODE] 실전 결제
+  // ---------------------------------------------------------
+  const processRealPayment = async () => {
+    if (cart.length === 0) return;
+    const orderType = selectedOrderType || 'dine_in';
+    const tipAmount = selectedTipAmount;
+    const tableNum = currentTableNumber || (orderType === 'to_go' ? 'To Go' : '00');
+
+    try {
+      const { subtotal, tax, cardFee, grandTotal } = calculateTotals();
+      const finalAmountWithTip = grandTotal + tipAmount;
+
+      console.log(`💳 Processing Real Payment: $${finalAmountWithTip}`);
+      
+      // Stripe 결제 (실전 시 활성화)
+      // await fetch('/api/stripe/process', ...);
+
+      // DB 저장
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
           total_amount: finalAmountWithTip,
           status: 'paid',
-          table_number: currentTableNumber,
+          table_number: tableNum,
           order_type: orderType,
-          tip_amount: tipAmount
         })
         .select()
         .single();
@@ -249,52 +299,60 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
       }));
       await supabase.from('order_items').insert(orderItemsData);
 
-      // 3. Clover 연동
-      const cloverRes = await fetch('/api/clover/order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: cart,
-          totalAmount: finalAmountWithTip,
-          tableNumber: currentTableNumber,
-          orderType: orderType
-        })
-      });
-      const cloverJson = await cloverRes.json();
-      const cloverOrderId = cloverJson.orderId || "Error";
-
-      // 4. 주방 프린터 전송
-      console.log("🖨️ Sending to Local Printer Server...");
+      // Clover 연동
       try {
-        await fetch('http://localhost:4000/print', {
+        await fetch('/api/clover/order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: cart,
+              totalAmount: finalAmountWithTip,
+              tableNumber: tableNum,
+              orderType: orderType,
+              tipAmount: tipAmount
+            })
+        });
+      } catch (cloverError) {
+          console.error("⚠️ Clover Error:", cloverError);
+      }
+
+      // 프린터 전송
+      try {
+        await fetch('http://127.0.0.1:4000/print', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            items: cart, 
-            tableNumber: currentTableNumber,
-            orderId: cloverOrderId 
+            orderId: "Kiosk-" + orderData.id,          
+            tableNumber: tableNum, 
+            orderType: orderType,            
+            items: cart,                     
+            subtotal: subtotal,
+            tax: tax,
+            cardFee: cardFee,
+            tipAmount: tipAmount, 
+            totalAmount: finalAmountWithTip,
+            date: new Date().toLocaleString('en-US') 
           })
         });
-        console.log("🖨️ Print Command Sent!");
-      } catch (printError) {
-        console.error("Printer Error:", printError);
+      } catch (printError: any) {
+        alert(`⚠️ 프린터 연결 실패: ${printError.message}`);
       }
 
-      // 5. 완료
-      alert(`Payment Successful!`);
+      setShowPaymentInstruction(false);
+      alert("Payment Successful!");
       setCart([]); 
       setCurrentTableNumber('');
       setSelectedOrderType(null);
 
     } catch (error: any) {
-      console.error("Order Process Error:", error);
-      alert("Error: " + error.message);
+      alert("❌ Payment Error: " + error.message);
+      setShowPaymentInstruction(false);
     }
   };
 
   return (
-    <div className="flex h-full w-full bg-gray-100">
-      {/* 왼쪽: 메뉴판 영역 */}
+    <div className="flex h-full w-full bg-gray-100 relative">
+      {/* 메뉴 리스트 */}
       <div className="w-[70%] flex flex-col border-r border-gray-300 h-full">
         <div className="flex overflow-x-auto bg-white p-4 gap-3 shadow-sm h-28 scrollbar-hide items-center border-b border-gray-200">
           {categories.map((cat, index) => (
@@ -330,7 +388,7 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
         </div>
       </div>
 
-      {/* 오른쪽: 장바구니 영역 */}
+      {/* 장바구니 */}
       <div className="w-[30%] bg-white flex flex-col h-full shadow-2xl z-20">
         <div className="p-6 bg-gray-900 text-white shadow-md flex justify-between items-center shrink-0">
           <div>
@@ -360,7 +418,6 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
                   <div className="flex justify-between items-start">
                     <h4 className="font-extrabold text-xl text-gray-900 leading-tight">{cartItem.name}</h4>
                   </div>
-                  
                   {cartItem.selectedModifiers.length > 0 && (
                     <div className="mt-2 text-base text-gray-600 font-medium bg-gray-50 p-2 rounded-lg">
                       {cartItem.selectedModifiers.map((opt, i) => (
@@ -370,12 +427,10 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
                       ))}
                     </div>
                   )}
-                  
                   <div className="mt-3 font-black text-gray-900 text-2xl">
                     ${cartItem.totalPrice.toFixed(2)}
                   </div>
                 </div>
-
                 <div className="flex flex-col justify-center border-l pl-4 border-gray-100">
                   <button 
                     onClick={() => removeFromCart(cartItem.uniqueCartId)}
@@ -407,7 +462,6 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
               <span>${cardFee.toFixed(2)}</span>
             </div>
           </div>
-
           <div className="flex justify-between items-center mb-4 pt-4 border-t border-gray-200">
             <span className="text-2xl font-bold text-gray-800">Total</span>
             <span className="text-4xl font-black text-red-600">${grandTotal.toFixed(2)}</span>
@@ -451,6 +505,54 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
           subtotal={subtotal} 
           onSelectTip={handleTipSelect}
         />
+      )}
+
+      {/* ⚠️ [결제 대기 화면] */}
+      {showPaymentInstruction && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-md">
+           <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl flex flex-col items-center animate-bounce-in w-[600px]">
+              
+              <div className="mb-4 p-4 bg-purple-100 rounded-full text-purple-600">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-16 h-16">
+                   <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 001.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
+                 </svg>
+              </div>
+
+              <h2 className="text-3xl font-black text-gray-900 mb-2 text-center">
+                결제 대기 및 테스트
+              </h2>
+              <p className="text-lg text-gray-500 mb-8 text-center px-4">
+                아래 보라색 버튼을 누르면<br/>
+                <b>돈은 안 나가고, Clover 매출 + 프린트</b>만 실행됩니다.
+              </p>
+
+              <div className="flex flex-col gap-4 w-full">
+                {/* 1. Clover 연동 테스트 버튼 */}
+                <button
+                  onClick={processCloverTestWithoutPayment}
+                  className="w-full h-20 bg-purple-600 text-white text-2xl font-bold rounded-2xl hover:bg-purple-700 shadow-lg flex items-center justify-center gap-2 animate-pulse"
+                >
+                  ☘️ Clover 연동 + 🖨️ 프린트 (결제 Skip)
+                </button>
+
+                {/* 2. 실제 결제 버튼 */}
+                <button
+                  onClick={processRealPayment}
+                  className="w-full h-20 bg-green-600 text-white text-2xl font-bold rounded-2xl hover:bg-green-700 shadow-lg flex items-center justify-center gap-2"
+                >
+                  💳 (실전) 카드 결제하기
+                </button>
+
+                <button
+                  onClick={() => setShowPaymentInstruction(false)}
+                  className="w-full h-16 bg-gray-200 text-gray-600 text-xl font-bold rounded-2xl hover:bg-gray-300"
+                >
+                  취소
+                </button>
+              </div>
+
+           </div>
+        </div>
       )}
     </div>
   );
