@@ -151,9 +151,7 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
   const handleOrderTypeSelect = (type: 'dine_in' | 'to_go') => {
     setSelectedOrderType(type);
     setShowOrderTypeModal(false); 
-    if (type === 'to_go') {
-        setCurrentTableNumber('To Go'); 
-    }
+  
     setShowTipModal(true);
   };
 
