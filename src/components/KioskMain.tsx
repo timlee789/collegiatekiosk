@@ -295,20 +295,27 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
     <div className="flex h-full w-full bg-gray-100 relative">
       {/* 메뉴 리스트 */}
       <div className="w-[70%] flex flex-col border-r border-gray-300 h-full">
-        <div className="flex overflow-x-auto bg-white p-4 gap-3 shadow-sm h-28 scrollbar-hide items-center border-b border-gray-200">
-          {categories.map((cat, index) => (
-            <button
-              key={cat.id || index}
-              onClick={() => setActiveTab(cat.name)}
-              className={`flex-shrink-0 px-8 h-16 rounded-full text-2xl font-extrabold transition-all shadow-sm border-2
-                ${activeTab === cat.name 
-                  ? 'bg-red-600 text-white border-red-600 shadow-md scale-105' 
-                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300'}`}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
+       {/* 메뉴 카테고리 리스트 (수정됨) */}
+<div className="flex overflow-x-auto bg-white p-2 gap-2 shadow-sm h-24 scrollbar-hide items-center border-b border-gray-200">
+  {categories.map((cat, index) => {
+    // 1️⃣ 이름 변경 로직: 'Plates & Salads'를 'Salads'로 화면에만 짧게 표시
+    // (데이터 로직은 그대로 두고 보여지는 글자만 바꿉니다)
+    const displayName = cat.name === "Plates & Salads" ? "Salads" : cat.name;
+
+    return (
+      <button
+        key={cat.id || index}
+        onClick={() => setActiveTab(cat.name)} // 중요: 내부 로직은 원래 이름(cat.name) 유지
+        className={`flex-shrink-0 px-5 h-14 rounded-full text-xl font-extrabold transition-all shadow-sm border-2
+          ${activeTab === cat.name 
+            ? 'bg-red-600 text-white border-red-600 shadow-md scale-105' 
+            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300'}`}
+      >
+        {displayName}
+      </button>
+    );
+  })}
+</div>
 
         <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
           <div className="grid grid-cols-5 gap-4 content-start pb-20"> 
