@@ -476,15 +476,30 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
       {isSuccess && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md">
            <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl flex flex-col items-center w-[600px] text-center animate-bounce-in">
-              <div className="mb-6 bg-green-100 rounded-full p-6">
-                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-24 h-24 text-green-600">
+              
+              {/* 체크 아이콘 */}
+              <div className="mb-4 bg-green-100 rounded-full p-6">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-20 h-20 text-green-600">
                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                  </svg>
               </div>
-              <h2 className="text-5xl font-black text-gray-900 mb-6">Thank You!</h2>
-              <p className="text-2xl text-gray-500">
-                Payment Complete.<br/>Please take your receipt.
+
+              <h2 className="text-5xl font-black text-gray-900 mb-2">Thank You!</h2>
+              <p className="text-2xl text-gray-500 mb-6">
+                Payment Complete.
               </p>
+
+              {/* ✨ [수정된 안내문: 영수증 보여주기 강조] */}
+              <div className="bg-blue-50 border-2 border-blue-200 p-6 rounded-3xl w-full shadow-md">
+                <p className="text-xl text-gray-800 font-bold leading-tight mb-2">
+                  🥤 If you ordered a Drink,
+                </p>
+                <p className="text-2xl text-blue-800 font-black leading-tight">
+                  Please <span className="text-red-600 underline decoration-4 underline-offset-4">SHOW YOUR RECEIPT</span><br/>
+                  to the Cashier to get a cup.
+                </p>
+              </div>
+
            </div>
         </div>
       )}
