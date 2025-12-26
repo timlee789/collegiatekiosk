@@ -38,7 +38,7 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
   
   // 결제 진행 상태
   const [isProcessing, setIsProcessing] = useState(false);
-  // ✨ [추가] 결제 성공 화면 상태 (Alert 대신 사용)
+  // ✨ 결제 성공 화면 상태 (Alert 대신 사용)
   const [isSuccess, setIsSuccess] = useState(false);
   
   const [currentTableNumber, setCurrentTableNumber] = useState<string>('');
@@ -61,6 +61,64 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
   useEffect(() => {
     cartEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [cart]);
+
+  // ==================================================================
+  // ✨ [추가] 1. 초기화 함수 (Reset Logic)
+  // ==================================================================
+  const resetToHome = () => {
+    console.log("🔄 Resetting Kiosk to Home...");
+    setCart([]);                
+    setCurrentTableNumber('');  
+    setSelectedOrderType(null); 
+    setIsSuccess(false);        
+    setIsProcessing(false);
+    setShowTipModal(false);
+    setShowTableModal(false);
+    setShowOrderTypeModal(false);
+    setShowDayWarning(false);
+    
+    // 첫 번째 카테고리로 탭 이동
+    if (categories.length > 0) {
+      setActiveTab(categories[0].name); 
+    }
+    
+    // 화면 맨 위로 스크롤
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // ==================================================================
+  // ✨ [추가] 2. 3분 유휴 시간 감지 (Idle Timer)
+  // ==================================================================
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+
+    const resetIdleTimer = () => {
+      clearTimeout(timer);
+      // 3분 (180,000ms) 후에 리셋 실행
+      timer = setTimeout(() => {
+        // 결제 진행 중(로딩)일 때는 리셋 방지
+        if (!isProcessing) { 
+          resetToHome(); 
+        }
+      }, 180000); 
+    };
+
+    // 터치, 클릭, 스크롤 이벤트 발생 시 타이머 초기화
+    window.addEventListener('click', resetIdleTimer);
+    window.addEventListener('touchstart', resetIdleTimer);
+    window.addEventListener('scroll', resetIdleTimer);
+
+    resetIdleTimer(); // 시작
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('click', resetIdleTimer);
+      window.removeEventListener('touchstart', resetIdleTimer);
+      window.removeEventListener('scroll', resetIdleTimer);
+    };
+  }, [isProcessing, categories]); 
+  // ==================================================================
+
 
   const filteredItems = items.filter(item => item.category === activeTab);
 
@@ -265,35 +323,23 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
           })
         });
       } catch (printError: any) {
-        // 프린터 에러는 사용자에게 보여주지 않고 로그만 남김 (결제는 이미 성공했으므로)
         console.error("Printer Error:", printError);
       }
 
       // ------------------------------------------------------------------
-      // ★ 핵심 수정: Alert(OK버튼) 제거 및 자동 초기화 로직
+      // ★ 핵심 수정: 15초 뒤 자동 리셋 (초기화 함수 호출)
       // ------------------------------------------------------------------
       setIsProcessing(false); // 로딩 끄고
-      setIsSuccess(true);     // "Thank You" 화면 켜기 (버튼 없음)
+      setIsSuccess(true);     // "Thank You" 화면 켜기
 
-      // 3초 뒤에 자동으로 초기화 (손님이 버튼 안 눌러도 됨)
+      // 15초 대기 후 초기화 실행
       setTimeout(() => {
-        setIsSuccess(false);        // Thank You 화면 끄기
-        setCart([]);                // 장바구니 비우기
-        setCurrentTableNumber('');  // 테이블 번호 초기화
-        setSelectedOrderType(null); // 주문 타입 초기화
-        // ✨ [추가] 첫 번째 카테고리(Home)로 강제 이동
-        if (categories.length > 0) {
-          setActiveTab(categories[0].name); 
-        }
-
-        // ✨ [추가] 스크롤을 맨 위로 올리기 (메뉴 리스트가 내려가 있을 수 있으므로)
-        // (메뉴 리스트를 감싸는 div에 id="menu-list-container"를 주거나, window 스크롤을 씁니다)
-        // 여기서는 가장 간단하게 탭 변경으로 리렌더링을 유도합니다.
-      }, 3000); 
+        resetToHome(); 
+      }, 15000); 
 
     } catch (error: any) {
       setIsProcessing(false);
-      alert("❌ Error: " + error.message); // 에러는 여전히 알려줘야 함
+      alert("❌ Error: " + error.message); 
     }
   };
 
