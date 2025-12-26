@@ -281,7 +281,14 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
         setCart([]);                // 장바구니 비우기
         setCurrentTableNumber('');  // 테이블 번호 초기화
         setSelectedOrderType(null); // 주문 타입 초기화
-        // 처음 화면으로 돌아감
+        // ✨ [추가] 첫 번째 카테고리(Home)로 강제 이동
+        if (categories.length > 0) {
+          setActiveTab(categories[0].name); 
+        }
+
+        // ✨ [추가] 스크롤을 맨 위로 올리기 (메뉴 리스트가 내려가 있을 수 있으므로)
+        // (메뉴 리스트를 감싸는 div에 id="menu-list-container"를 주거나, window 스크롤을 씁니다)
+        // 여기서는 가장 간단하게 탭 변경으로 리렌더링을 유도합니다.
       }, 3000); 
 
     } catch (error: any) {
