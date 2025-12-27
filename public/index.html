@@ -140,6 +140,30 @@
         #btn-close-qr { background-color: #333; color: white; padding: 1vh 4vw; border-radius: 2vh; border: none; font-size: 1.8vh; font-weight: bold; cursor: pointer; }
 
         #kiosk-container { display: none !important; }
+
+        /* =========================================
+           [신규] 카메라 위 큰 안내 문구
+           ========================================= */
+           #camera-headline {
+            position: absolute;
+            top: 18vh; /* 헤더 바로 아래 위치 */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            text-align: center;
+            
+            /* 크고 반투명한 노란색 설정 */
+            font-size: 7vh; /* 아주 크게 */
+            font-weight: 900;
+            color: rgba(255, 235, 59, 0.6); /* 밝은 노란색 + 60% 투명도 */
+            
+            text-transform: uppercase; /* 대문자 강조 */
+            text-shadow: 0 2px 15px rgba(0,0,0,0.2); /* 가독성을 위한 연한 그림자 */
+            z-index: 40; /* UI 버튼들보다는 뒤에, 캔버스보다는 앞에 */
+            pointer-events: none; /* 클릭 방해하지 않음 */
+            font-family: 'Montserrat', sans-serif;
+            letter-spacing: -2px;
+        }
     </style>
 </head>
 <body>
@@ -182,6 +206,16 @@
 
 <div id="countdown-overlay"></div>
 <div id="loading-bar-container"><div id="loading-bar"></div></div>
+<div id="kiosk-container"></div>
+
+<div id="camera-headline">Show Your Smile</div>
+
+
+<div id="smile-ui"> ... </div>
+<div id="photo-ui" style="display: none;"> ... </div>
+
+<video id="webcam" playsinline autoplay></video>
+<canvas id="output_canvas"></canvas>
 <video id="webcam" playsinline autoplay></video>
 <canvas id="output_canvas"></canvas>
 
