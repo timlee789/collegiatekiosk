@@ -240,6 +240,9 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
     processRealPayment(tipAmount);
   };
 
+
+  
+
   const processRealPayment = async (finalTipAmount: number) => {
     if (cart.length === 0) return;
     setIsProcessing(true); // 로딩 화면 시작
@@ -479,6 +482,7 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
                 <span className="text-2xl font-bold text-gray-800">Total</span>
                 <span className="text-4xl font-black text-red-600">${grandTotal.toFixed(2)}</span>
               </div>
+
 
               <button 
                 className="w-full h-24 bg-green-600 text-white text-4xl font-black rounded-2xl hover:bg-green-700 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
