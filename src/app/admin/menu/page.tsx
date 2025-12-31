@@ -118,26 +118,46 @@ export default function AdminMenuPage() {
     fetchItems(selectedCatId!);
   };
 
+ // ---------------------------------------------------------
+  // [Modified] 아이템 순서 변경 함수 (재정렬 방식)
+  // ---------------------------------------------------------
   const handleMoveItem = async (index: number, direction: 'prev' | 'next') => {
     if (direction === 'prev' && index === 0) return;
     if (direction === 'next' && index === items.length - 1) return;
 
     const targetIndex = direction === 'prev' ? index - 1 : index + 1;
     
+    // 1. 배열 복사 후 위치 교환 (UI 즉시 반영)
     const newItems = [...items];
-    const itemA = newItems[index];
-    const itemB = newItems[targetIndex];
+    const temp = newItems[index];
+    newItems[index] = newItems[targetIndex];
+    newItems[targetIndex] = temp;
     
-    newItems[index] = itemB;
-    newItems[targetIndex] = itemA;
-    setItems(newItems);
+    setItems(newItems); // 화면 먼저 갱신
 
-    const { error: e1 } = await supabase.from('items').update({ sort_order: itemB.sort_order }).eq('id', itemA.id);
-    const { error: e2 } = await supabase.from('items').update({ sort_order: itemA.sort_order }).eq('id', itemB.id);
+    // 2. [핵심] 전체 리스트를 순회하며 1부터 차례대로 번호 재부여
+    // 이렇게 하면 기존에 1, 1, 5, 5 처럼 꼬여있던 번호들이 1, 2, 3, 4로 싹 고쳐집니다.
+    const updates = newItems.map((item, idx) => ({
+        id: item.id,
+        sort_order: idx + 1 // 0번 인덱스 -> 1번, 1번 인덱스 -> 2번 ...
+    }));
 
-    if (e1 || e2) {
-      console.error("Reorder failed", e1, e2);
-      fetchItems(selectedCatId!);
+    // 3. 변경된 순서 DB에 저장 (Promise.all로 병렬 처리)
+    try {
+        const updatePromises = updates.map(u => 
+            supabase.from('items').update({ sort_order: u.sort_order }).eq('id', u.id)
+        );
+        
+        await Promise.all(updatePromises);
+        
+        // (선택) 확실한 동기화를 위해 완료 후 재조회 하셔도 되지만, 
+        // UI가 이미 바뀌었으므로 생략해도 됩니다.
+        // fetchItems(selectedCatId!); 
+
+    } catch (error) {
+        console.error("Reorder failed", error);
+        alert("Failed to save order. Please refresh.");
+        fetchItems(selectedCatId!); // 에러 시 원복
     }
   };
 
