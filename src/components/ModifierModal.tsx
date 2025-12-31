@@ -87,60 +87,68 @@ export default function ModifierModal({ item, modifiersObj, onClose, onConfirm }
     const currentTotal = item.price + selectedOptions.reduce((sum, opt) => sum + opt.price, 0);
 
     return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            {/* ✨ 모달 너비 확대: max-w-6xl 적용 */}
+            <div className="bg-white rounded-[2rem] w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
 
                 {/* 헤더 */}
-                <div className="p-6 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                <div className="p-8 border-b bg-gray-50 flex justify-between items-center shrink-0">
                     <div>
-                        <h2 className="text-3xl font-extrabold text-gray-800">{item.name}</h2>
-                        <p className="text-gray-500 text-sm mt-1">Select your options</p>
+                        {/* ✨ 헤더 글씨 확대 */}
+                        <h2 className="text-4xl font-extrabold text-gray-900">{item.name}</h2>
+                        <p className="text-gray-500 text-xl mt-2 font-medium">Select your options</p>
                     </div>
-                    <span className="text-2xl text-red-600 font-bold">${currentTotal.toFixed(2)}</span>
+                    {/* ✨ 가격 글씨 확대 */}
+                    <span className="text-4xl text-red-600 font-black">${currentTotal.toFixed(2)}</span>
                 </div>
 
                 {/* 옵션 스크롤 영역 */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-white">
+                <div className="flex-1 overflow-y-auto p-8 space-y-10 bg-white">
                     {item.modifierGroups.length === 0 && (
-                        <p className="text-center text-gray-400 py-10">No options available for this item.</p>
+                        <p className="text-center text-gray-400 py-10 text-2xl">No options available for this item.</p>
                     )}
 
                     {item.modifierGroups.map((groupName, idx) => {
                         const group = modifiersObj[groupName];
                         if (!group) return null;
 
-                        const isAddOn = groupName.toLowerCase().includes('add on');
-                        const gridClass = isAddOn ? 'grid-cols-2' : 'grid-cols-1';
-
                         return (
                             <div key={`${groupName}-${idx}`}>
-                                <h3 className="text-lg font-bold mb-3 text-gray-700 border-l-4 border-red-500 pl-3 uppercase">
+                                {/* ✨ 그룹 제목 글씨 확대 */}
+                                <h3 className="text-3xl font-black mb-6 text-gray-800 border-l-8 border-red-500 pl-4 uppercase tracking-tight">
                                     {groupName}
                                 </h3>
-                                <div className={`grid ${gridClass} gap-3`}>
+                                
+                                {/* ✨ [핵심 수정] 무조건 3열 그리드 (grid-cols-3) 및 간격 확대 (gap-5) */}
+                                <div className="grid grid-cols-3 gap-5">
                                     {group.options.map((option, optIdx) => {
                                         const isSelected = selectedOptions.some(o => o.name === option.name);
                                         return (
                                             <div
                                                 key={`${option.name}-${optIdx}`}
-                                                // ⚠️ [수정됨] groupName을 함께 전달하여 단일 선택 로직 수행
                                                 onClick={() => toggleOption(option, groupName)}
-                                                className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all
+                                                // ✨ 박스 패딩 확대 (p-6)
+                                                className={`flex items-center p-6 border-2 rounded-2xl cursor-pointer transition-all active:scale-95
                                                     ${isSelected
-                                                        ? 'border-red-500 bg-red-50 ring-1 ring-red-500'
+                                                        ? 'border-red-500 bg-red-50 ring-2 ring-red-500 shadow-md'
                                                         : 'border-gray-200 hover:border-gray-400 hover:bg-gray-50'
                                                     }`}
                                             >
-                                                <div className={`w-6 h-6 rounded-full border flex items-center justify-center mr-3
+                                                {/* ✨ 체크박스 원형 확대 (w-8 h-8) */}
+                                                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center mr-5 shrink-0
                                                     ${isSelected ? 'bg-red-500 border-red-500' : 'bg-white border-gray-300'}`}
                                                 >
-                                                    {/* 라디오 버튼 느낌을 위해 둥근 점으로 표시 (체크도 무방) */}
-                                                    {isSelected && <div className="w-2.5 h-2.5 bg-white rounded-full" />}
+                                                    {isSelected && <div className="w-3.5 h-3.5 bg-white rounded-full" />}
                                                 </div>
-                                                <span className="text-lg font-medium text-gray-800">{option.name}</span>
-                                                {option.price > 0 && (
-                                                    <span className="ml-auto text-red-600 font-semibold">+${option.price.toFixed(2)}</span>
-                                                )}
+                                                
+                                                <div className="flex flex-col">
+                                                    {/* ✨ 옵션 이름 글씨 확대 (text-2xl) */}
+                                                    <span className="text-2xl font-bold text-gray-800 leading-tight">{option.name}</span>
+                                                    {option.price > 0 && (
+                                                        // ✨ 가격 글씨 확대 (text-xl)
+                                                        <span className="text-xl text-red-600 font-bold mt-1">+${option.price.toFixed(2)}</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -151,18 +159,20 @@ export default function ModifierModal({ item, modifiersObj, onClose, onConfirm }
                 </div>
 
                 {/* 하단 버튼 */}
-                <div className="p-6 border-t bg-white flex gap-4 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                <div className="p-8 border-t bg-white flex gap-6 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                     <button
                         onClick={onClose}
-                        className="flex-1 bg-gray-200 text-gray-700 text-xl font-bold rounded-xl h-16 hover:bg-gray-300 transition-colors"
+                        // ✨ 버튼 높이 및 글씨 확대
+                        className="flex-1 bg-gray-200 text-gray-700 text-3xl font-bold rounded-2xl h-24 hover:bg-gray-300 transition-colors"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleAddToCart}
-                        className="flex-[2] bg-red-600 text-white text-xl font-bold rounded-xl h-16 hover:bg-red-700 shadow-lg shadow-red-200 transition-colors flex items-center justify-center gap-2"
+                        // ✨ 버튼 높이 및 글씨 확대
+                        className="flex-[2] bg-red-600 text-white text-3xl font-bold rounded-2xl h-24 hover:bg-red-700 shadow-xl shadow-red-200 transition-colors flex items-center justify-center gap-3"
                     >
-                        Add to Order <span className="text-red-200 text-lg">| ${currentTotal.toFixed(2)}</span>
+                        Add to Order <span className="text-red-200 text-2xl font-semibold">| ${currentTotal.toFixed(2)}</span>
                     </button>
                 </div>
 

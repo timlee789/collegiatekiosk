@@ -25,12 +25,15 @@ export const getKioskData = async () => {
         item_modifier_groups (
           modifier_groups (
             name,
-            modifiers (name, price)
+            modifiers (name, price, sort_order) 
           )
         )
       )
     `)
-    .order('sort_order', { ascending: true });
+    .order('sort_order', { ascending: true }); // items 정렬은 여기서 처리됨 (기존 코드 유지)
+
+  // modifiers(옵션) 정렬은 Supabase 깊은 중첩 쿼리에서 .order()가 복잡하므로
+  // 아래 자바스크립트 로직에서 처리하는 것이 가장 안전하고 빠릅니다.
 
   if (error) {
     console.error("❌ DB Fetch Error:", error.message);
@@ -60,11 +63,18 @@ export const getKioskData = async () => {
           if (group) {
             modGroups.push(group.name);
             if (!modifiersObj[group.name]) {
+              
+              // ✨ [수정된 부분] modifiers를 sort_order 기준으로 정렬 후 map 실행
+              const sortedModifiers = (group.modifiers || []).sort(
+                (a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0)
+              );
+
               modifiersObj[group.name] = {
                 name: group.name,
-                options: group.modifiers.map((m: any) => ({
+                options: sortedModifiers.map((m: any) => ({
                   name: m.name,
                   price: m.price
+                  // types.ts를 건드리지 않기 위해 sort_order는 반환 객체에 넣지 않고 정렬에만 사용
                 }))
               };
             }
@@ -83,7 +93,6 @@ export const getKioskData = async () => {
         modifierGroups: modGroups,
         sort_order: item.sort_order,
         is_available: item.is_available,
-        // [수정] 이제 빨간 줄이 안 뜰 겁니다 (types.ts 수정 전제)
         clover_id: item.clover_id 
       };
 

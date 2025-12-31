@@ -11,11 +11,12 @@ interface ModifierOption {
     id: string;
     name: string;
     price: number;
+    sort_order: number; // ✨ [New] 순서 필드 추가
 }
 interface SimpleItem {
     id: string;
     name: string;
-    category_id: string; // 카테고리별 정렬을 위해
+    category_id: string; 
 }
 
 export default function AdminModifiersPage() {
@@ -29,23 +30,27 @@ export default function AdminModifiersPage() {
     const [selectedGroup, setSelectedGroup] = useState<ModifierGroup | null>(null);
 
     const [options, setOptions] = useState<ModifierOption[]>([]);
-    const [linkedItemIds, setLinkedItemIds] = useState<string[]>([]); // 현재 그룹에 연결된 아이템 ID들
-    const [allItems, setAllItems] = useState<SimpleItem[]>([]); // 연결 설정을 위한 전체 아이템 목록
+    const [linkedItemIds, setLinkedItemIds] = useState<string[]>([]); 
+    const [allItems, setAllItems] = useState<SimpleItem[]>([]); 
+
+    // 옵션 수정용 상태
+    const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
+    const [editOptionForm, setEditOptionForm] = useState({ name: '', price: 0 });
 
     // 로딩 상태
     const [loadingOptions, setLoadingOptions] = useState(false);
 
-    // 초기 데이터 로드 (그룹 목록 & 전체 아이템 목록)
+    // 초기 데이터 로드
     useEffect(() => {
         fetchGroups();
         fetchAllItems();
     }, []);
 
-    // 그룹 선택 시 -> 옵션 목록 & 연결된 아이템 목록 가져오기
     useEffect(() => {
         if (selectedGroup) {
             fetchOptions(selectedGroup.id);
             fetchLinkedItems(selectedGroup.id);
+            setEditingOptionId(null); 
         } else {
             setOptions([]);
             setLinkedItemIds([]);
@@ -61,20 +66,23 @@ export default function AdminModifiersPage() {
     };
 
     const fetchAllItems = async () => {
-        // 아이템 리스트 (체크박스용)
         const { data } = await supabase.from('items').select('id, name, category_id').order('name');
         if (data) setAllItems(data);
     };
 
     const fetchOptions = async (groupId: string) => {
         setLoadingOptions(true);
-        const { data } = await supabase.from('modifiers').select('*').eq('group_id', groupId).order('price', { ascending: true });
+        // ✨ [수정] 정렬 기준을 price -> sort_order 로 변경
+        const { data } = await supabase
+            .from('modifiers')
+            .select('*')
+            .eq('group_id', groupId)
+            .order('sort_order', { ascending: true }); 
         if (data) setOptions(data);
         setLoadingOptions(false);
     };
 
     const fetchLinkedItems = async (groupId: string) => {
-        // 연결 테이블(item_modifier_groups) 조회
         const { data } = await supabase.from('item_modifier_groups').select('item_id').eq('group_id', groupId);
         if (data) {
             setLinkedItemIds(data.map(d => d.item_id));
@@ -88,7 +96,6 @@ export default function AdminModifiersPage() {
         const name = prompt("Enter new Group Name (e.g., 'Steak Temperature')");
         if (!name) return;
 
-        // 식당 ID가 필요하므로 하나 가져옴 (단일 식당 가정)
         const { data: restData } = await supabase.from('restaurants').select('id').single();
         if (!restData) return alert("Restaurant not found");
 
@@ -98,6 +105,7 @@ export default function AdminModifiersPage() {
         });
 
         if (!error) fetchGroups();
+        else alert(error.message);
     };
 
     const handleDeleteGroup = async (id: string) => {
@@ -108,7 +116,7 @@ export default function AdminModifiersPage() {
     };
 
     // ---------------------------------------------------------
-    // Handlers (Options)
+    // Handlers (Options - Add, Edit, Delete, Move)
     // ---------------------------------------------------------
     const handleAddOption = async () => {
         if (!selectedGroup) return;
@@ -117,10 +125,14 @@ export default function AdminModifiersPage() {
         const priceStr = prompt("Enter Price (0 for free)", "0");
         const price = parseFloat(priceStr || "0");
 
+        // ✨ [New] 현재 가장 큰 순서 번호 찾기 (맨 뒤에 추가하기 위해)
+        const maxOrder = options.length > 0 ? Math.max(...options.map(o => o.sort_order || 0)) : 0;
+
         await supabase.from('modifiers').insert({
             group_id: selectedGroup.id,
             name,
-            price
+            price,
+            sort_order: maxOrder + 1 // ✨ 순서 부여
         });
         fetchOptions(selectedGroup.id);
     };
@@ -131,14 +143,70 @@ export default function AdminModifiersPage() {
         if (selectedGroup) fetchOptions(selectedGroup.id);
     };
 
+    const startEditingOption = (opt: ModifierOption) => {
+        setEditingOptionId(opt.id);
+        setEditOptionForm({ name: opt.name, price: opt.price });
+    };
+
+    const handleUpdateOption = async () => {
+        if (!editingOptionId || !selectedGroup) return;
+        if (!editOptionForm.name) return alert("Name is required");
+
+        const { error } = await supabase
+            .from('modifiers')
+            .update({
+                name: editOptionForm.name,
+                price: editOptionForm.price
+            })
+            .eq('id', editingOptionId);
+
+        if (error) {
+            alert("Error updating: " + error.message);
+        } else {
+            setEditingOptionId(null);
+            fetchOptions(selectedGroup.id);
+        }
+    };
+
+    // ✨ [New] 옵션 순서 변경 핸들러
+    const handleMoveOption = async (index: number, direction: 'up' | 'down') => {
+        if (direction === 'up' && index === 0) return;
+        if (direction === 'down' && index === options.length - 1) return;
+    
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        
+        // UI 낙관적 업데이트
+        const newOptions = [...options];
+        const optA = newOptions[index];
+        const optB = newOptions[targetIndex];
+        
+        newOptions[index] = optB;
+        newOptions[targetIndex] = optA;
+        setOptions(newOptions);
+    
+        // DB 업데이트 (서로의 sort_order 교환)
+        // 주의: DB에 sort_order가 null인 데이터가 있다면 0으로 취급
+        const orderA = optA.sort_order || 0;
+        const orderB = optB.sort_order || 0;
+
+        // 만약 둘의 sort_order가 같다면(초기상태), 인덱스 기반으로 재정렬 필요할 수 있음.
+        // 여기서는 단순 교환 방식 사용
+        const { error: e1 } = await supabase.from('modifiers').update({ sort_order: orderB }).eq('id', optA.id);
+        const { error: e2 } = await supabase.from('modifiers').update({ sort_order: orderA }).eq('id', optB.id);
+    
+        if (e1 || e2) {
+            console.error("Reorder failed", e1, e2);
+            if (selectedGroup) fetchOptions(selectedGroup.id); // 실패 시 원복
+        }
+    };
+
     // ---------------------------------------------------------
-    // Handlers (Linking Items) - ⭐ 핵심 기능
+    // Handlers (Linking Items)
     // ---------------------------------------------------------
     const toggleItemLink = async (itemId: string, isLinked: boolean) => {
         if (!selectedGroup) return;
 
         if (isLinked) {
-            // 연결 해제 (Delete)
             const { error } = await supabase
                 .from('item_modifier_groups')
                 .delete()
@@ -149,7 +217,6 @@ export default function AdminModifiersPage() {
                 setLinkedItemIds(prev => prev.filter(id => id !== itemId));
             }
         } else {
-            // 연결 추가 (Insert)
             const { error } = await supabase
                 .from('item_modifier_groups')
                 .insert({
@@ -166,9 +233,7 @@ export default function AdminModifiersPage() {
     return (
         <div className="flex h-screen bg-gray-100 overflow-hidden">
 
-            {/* ------------------------------------------------ */}
             {/* 1. 좌측: Modifier Groups 목록 */}
-            {/* ------------------------------------------------ */}
             <div className="w-1/4 bg-white border-r flex flex-col min-w-[250px]">
                 <div className="p-4 border-b flex justify-between items-center bg-gray-50">
                     <h2 className="font-bold text-gray-800">1. Groups</h2>
@@ -196,10 +261,8 @@ export default function AdminModifiersPage() {
                 </ul>
             </div>
 
-            {/* ------------------------------------------------ */}
-            {/* 2. 중앙: Options 관리 */}
-            {/* ------------------------------------------------ */}
-            <div className="w-1/3 bg-white border-r flex flex-col min-w-[300px]">
+            {/* 2. 중앙: Options 관리 (수정/삭제/순서변경 기능 통합) */}
+            <div className="w-1/3 bg-white border-r flex flex-col min-w-[350px]">
                 <div className="p-4 border-b flex justify-between items-center bg-gray-50">
                     <h2 className="font-bold text-gray-800">
                         2. Options for: <span className="text-blue-600">{selectedGroup?.name || '-'}</span>
@@ -219,30 +282,106 @@ export default function AdminModifiersPage() {
                     ) : loadingOptions ? (
                         <div className="text-center text-gray-400 mt-10">Loading...</div>
                     ) : (
-                        <ul className="space-y-2">
+                        <ul className="space-y-3">
                             {options.length === 0 && <p className="text-sm text-gray-400 text-center">No options yet.</p>}
-                            {options.map(opt => (
-                                <li key={opt.id} className="bg-white p-3 rounded shadow-sm border flex justify-between items-center">
-                                    <div>
-                                        <span className="font-bold text-gray-800">{opt.name}</span>
-                                        {opt.price > 0 && <span className="text-sm text-green-600 ml-2">(+${opt.price})</span>}
-                                    </div>
-                                    <button
-                                        onClick={() => handleDeleteOption(opt.id)}
-                                        className="text-red-400 hover:text-red-600 text-sm font-bold px-2"
-                                    >
-                                        Delete
-                                    </button>
-                                </li>
-                            ))}
+                            
+                            {options.map((opt, index) => {
+                                const isEditing = editingOptionId === opt.id;
+
+                                return (
+                                    <li key={opt.id} className={`bg-white p-3 rounded shadow-sm border flex flex-col gap-2 
+                                        ${isEditing ? 'ring-2 ring-blue-500 border-transparent' : 'border-gray-200'}`}>
+                                        
+                                        {isEditing ? (
+                                            // [수정 모드]
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <label className="text-xs text-gray-400 font-bold">Name</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={editOptionForm.name}
+                                                        onChange={(e) => setEditOptionForm(prev => ({...prev, name: e.target.value}))}
+                                                        className="w-full border-b border-blue-500 outline-none text-sm font-bold"
+                                                    />
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <label className="text-xs text-gray-400 font-bold">Price($)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.01"
+                                                        value={editOptionForm.price}
+                                                        onChange={(e) => setEditOptionForm(prev => ({...prev, price: parseFloat(e.target.value) || 0}))}
+                                                        className="w-20 border-b border-blue-500 outline-none text-sm font-bold"
+                                                    />
+                                                </div>
+                                                <div className="flex justify-end gap-2 mt-2">
+                                                    <button 
+                                                        onClick={() => setEditingOptionId(null)}
+                                                        className="px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button 
+                                                        onClick={handleUpdateOption}
+                                                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
+                                                    >
+                                                        Save
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            // [보기 모드]
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-3">
+                                                    {/* ✨ [New] 순서 변경 화살표 */}
+                                                    <div className="flex flex-col">
+                                                        <button 
+                                                            onClick={() => handleMoveOption(index, 'up')}
+                                                            disabled={index === 0}
+                                                            className="text-gray-300 hover:text-blue-600 disabled:opacity-0 text-[10px] leading-none"
+                                                        >
+                                                            ▲
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleMoveOption(index, 'down')}
+                                                            disabled={index === options.length - 1}
+                                                            className="text-gray-300 hover:text-blue-600 disabled:opacity-0 text-[10px] leading-none"
+                                                        >
+                                                            ▼
+                                                        </button>
+                                                    </div>
+
+                                                    <div>
+                                                        <span className="font-bold text-gray-800">{opt.name}</span>
+                                                        {opt.price > 0 && <span className="text-sm text-green-600 ml-2">(+${opt.price})</span>}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex gap-1">
+                                                    <button
+                                                        onClick={() => startEditingOption(opt)}
+                                                        className="text-blue-400 hover:text-blue-600 text-xs font-bold px-2 py-1 bg-blue-50 hover:bg-blue-100 rounded"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteOption(opt.id)}
+                                                        className="text-red-400 hover:text-red-600 text-xs font-bold px-2 py-1 bg-red-50 hover:bg-red-100 rounded"
+                                                    >
+                                                        Del
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </li>
+                                );
+                            })}
                         </ul>
                     )}
                 </div>
             </div>
 
-            {/* ------------------------------------------------ */}
             {/* 3. 우측: 연결된 아이템 (Link Items) */}
-            {/* ------------------------------------------------ */}
             <div className="flex-1 bg-white flex flex-col">
                 <div className="p-4 border-b bg-gray-50">
                     <h2 className="font-bold text-gray-800">3. Apply to Items</h2>

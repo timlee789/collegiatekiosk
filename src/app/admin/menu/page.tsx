@@ -31,13 +31,12 @@ export default function AdminMenuPage() {
     }
   };
 
-  // [수정] sort_order 순으로 가져오기
   const fetchItems = async (catId: string) => {
     const { data } = await supabase
       .from('items')
       .select('*')
       .eq('category_id', catId)
-      .order('sort_order', { ascending: true }); // 순서대로 정렬
+      .order('sort_order', { ascending: true });
     if (data) setItems(data);
   };
 
@@ -46,7 +45,6 @@ export default function AdminMenuPage() {
     const name = prompt("Enter new Item Name:");
     if (!name) return;
 
-    // 현재 리스트의 가장 큰 순서 번호 찾기
     const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.sort_order || 0)) : 0;
 
     const { error } = await supabase.from('items').insert({
@@ -55,7 +53,7 @@ export default function AdminMenuPage() {
       name: name,
       price: 0,
       is_available: true,
-      sort_order: maxOrder + 1 // 맨 뒤에 추가
+      sort_order: maxOrder + 1
     });
 
     if (error) alert("Error adding item: " + error.message);
@@ -70,7 +68,8 @@ export default function AdminMenuPage() {
   const saveItem = async () => {
     if (!editForm.name) return alert("Name is required");
 
-    const { error } = await supabase
+    // ✨ [수정 1] 업데이트 쿼리에 .select()를 추가하여 업데이트 결과를 확실히 확인
+    const { data, error } = await supabase
       .from('items')
       .update({
         name: editForm.name,
@@ -78,13 +77,19 @@ export default function AdminMenuPage() {
         is_available: editForm.is_available,
         category_id: editForm.category_id
       })
-      .eq('id', editingId);
+      .eq('id', editingId)
+      .select(); // 업데이트된 데이터를 반환받음
 
     if (error) {
       alert("Error saving: " + error.message);
     } else {
-      setEditingId(null);
-      fetchItems(selectedCatId!);
+      // 데이터가 정상적으로 업데이트 되었는지 확인 (RLS 정책 등으로 인해 업데이트가 무시될 수 있음)
+      if (data && data.length > 0) {
+        setEditingId(null);
+        fetchItems(selectedCatId!);
+      } else {
+        alert("Failed to update item. Please check Database Permissions (RLS).");
+      }
     }
   };
 
@@ -113,16 +118,12 @@ export default function AdminMenuPage() {
     fetchItems(selectedCatId!);
   };
 
-  // ---------------------------------------------------------
-  // [New] 아이템 순서 변경 함수
-  // ---------------------------------------------------------
   const handleMoveItem = async (index: number, direction: 'prev' | 'next') => {
     if (direction === 'prev' && index === 0) return;
     if (direction === 'next' && index === items.length - 1) return;
 
     const targetIndex = direction === 'prev' ? index - 1 : index + 1;
     
-    // UI 낙관적 업데이트 (즉시 반영)
     const newItems = [...items];
     const itemA = newItems[index];
     const itemB = newItems[targetIndex];
@@ -131,13 +132,12 @@ export default function AdminMenuPage() {
     newItems[targetIndex] = itemA;
     setItems(newItems);
 
-    // DB 업데이트 (서로의 sort_order 교환)
     const { error: e1 } = await supabase.from('items').update({ sort_order: itemB.sort_order }).eq('id', itemA.id);
     const { error: e2 } = await supabase.from('items').update({ sort_order: itemA.sort_order }).eq('id', itemB.id);
 
     if (e1 || e2) {
       console.error("Reorder failed", e1, e2);
-      fetchItems(selectedCatId!); // 실패 시 원복
+      fetchItems(selectedCatId!);
     }
   };
 
@@ -193,7 +193,7 @@ export default function AdminMenuPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {items.map((item, index) => { // index 추가
+            {items.map((item, index) => {
               const isEditing = editingId === item.id;
               const displayData = isEditing ? editForm : item;
 
@@ -201,14 +201,13 @@ export default function AdminMenuPage() {
                 <div key={item.id} className={`bg-white p-5 rounded-2xl shadow-sm border transition-all 
                   ${isEditing ? 'ring-2 ring-blue-500 border-transparent shadow-xl z-10 scale-[1.02]' : 'border-gray-200'}`}>
                   
-                  {/* [New] 순서 변경 버튼 (카드 상단) */}
+                  {/* 순서 변경 버튼 */}
                   {!isEditing && (
                     <div className="flex justify-between mb-2">
                        <button 
                          onClick={() => handleMoveItem(index, 'prev')}
                          disabled={index === 0}
                          className="text-gray-400 hover:text-blue-600 disabled:opacity-20 text-lg font-bold px-2"
-                         title="Move Left/Up"
                        >
                          ◀
                        </button>
@@ -217,7 +216,6 @@ export default function AdminMenuPage() {
                          onClick={() => handleMoveItem(index, 'next')}
                          disabled={index === items.length - 1}
                          className="text-gray-400 hover:text-blue-600 disabled:opacity-20 text-lg font-bold px-2"
-                         title="Move Right/Down"
                        >
                          ▶
                        </button>
@@ -226,21 +224,21 @@ export default function AdminMenuPage() {
 
                   {/* 이미지 영역 */}
                   <div className="aspect-square bg-gray-100 rounded-xl relative overflow-hidden group mb-4 flex items-center justify-center">
-                     {displayData.image_url ? (
-                       <img 
-                        src={displayData.image_url} 
-                        alt={displayData.name} 
-                        className="w-full h-full object-cover" 
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                       />
-                     ) : (
-                       <span className="text-gray-400 text-sm font-bold">No Image</span>
-                     )}
-                     
-                     <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white font-bold text-sm z-20">
-                       Change Photo
-                       <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(item.id, e.target.files[0])} />
-                     </label>
+                      {displayData.image_url ? (
+                        <img 
+                         src={displayData.image_url} 
+                         alt={displayData.name} 
+                         className="w-full h-full object-cover" 
+                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-sm font-bold">No Image</span>
+                      )}
+                      
+                      <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white font-bold text-sm z-20">
+                        Change Photo
+                        <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(item.id, e.target.files[0])} />
+                      </label>
                   </div>
 
                   {/* 입력 폼 */}
@@ -250,7 +248,8 @@ export default function AdminMenuPage() {
                         <label className="text-xs text-gray-500 font-bold uppercase block mb-1">Move Category</label>
                         <select
                           value={editForm.category_id}
-                          onChange={(e) => setEditForm({ ...editForm, category_id: e.target.value })}
+                          // ✨ [수정 2] 상태 업데이트 시 함수형 업데이트(prev => ...) 사용
+                          onChange={(e) => setEditForm((prev: any) => ({ ...prev, category_id: e.target.value }))}
                           className="w-full p-1 bg-white border border-gray-300 rounded text-sm font-bold text-gray-800"
                         >
                           {categories.map(cat => (
@@ -265,8 +264,9 @@ export default function AdminMenuPage() {
                       <input 
                         type="text" 
                         disabled={!isEditing}
-                        value={displayData.name}
-                        onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        value={displayData.name || ''} // 값이 없을 때 경고 방지
+                        // ✨ [수정 3] 입력값 유실 방지를 위한 함수형 업데이트 적용
+                        onChange={(e) => setEditForm((prev: any) => ({ ...prev, name: e.target.value }))}
                         className={`w-full text-lg font-bold bg-transparent outline-none border-b-2 py-1
                           ${isEditing ? 'border-blue-500 text-gray-900' : 'border-transparent text-gray-800'}`}
                       />
@@ -280,7 +280,8 @@ export default function AdminMenuPage() {
                             step="0.01"
                             disabled={!isEditing}
                             value={displayData.price}
-                            onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                            // ✨ [수정 4] Price 입력도 함수형 업데이트 적용
+                            onChange={(e) => setEditForm((prev: any) => ({ ...prev, price: e.target.value }))}
                             className={`w-full text-lg font-bold bg-transparent outline-none border-b-2 py-1
                               ${isEditing ? 'border-blue-500 text-gray-900' : 'border-transparent text-gray-800'}`}
                           />
@@ -288,7 +289,8 @@ export default function AdminMenuPage() {
                        <div className="flex items-end pb-2">
                           <button 
                             disabled={!isEditing}
-                            onClick={() => setEditForm({ ...editForm, is_available: !editForm.is_available })}
+                            // ✨ [수정 5] 토글 버튼도 함수형 업데이트 적용
+                            onClick={() => setEditForm((prev: any) => ({ ...prev, is_available: !prev.is_available }))}
                             className={`text-xs font-bold px-3 py-1 rounded-full transition-colors
                               ${displayData.is_available 
                                 ? 'bg-green-100 text-green-700' 
