@@ -53,6 +53,56 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
     }
   }, [categories]);
 
+// ============================================================
+  // 🔒 [추가] 키오스크 제스처 및 우클릭 잠금
+  // ============================================================
+  useEffect(() => {
+    // 1. 우클릭 방지 (Context Menu)
+    const handleContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
+    // 2. 줌인/아웃 방지 및 가로 스와이프 방지 로직
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        // 손가락 2개 이상 터치 시 무시 (핀치 줌 방지)
+        e.preventDefault();
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+    
+    // 이벤트 리스너 등록
+    document.addEventListener('contextmenu', handleContextMenu, { passive: false });
+    document.addEventListener('touchstart', handleTouchStart, { passive: false });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    // 3. (선택사항) 키보드 단축키 방지 (F12, F5 등) - 키오스크용
+    const handleKeyDown = (e: KeyboardEvent) => {
+        // F5, Ctrl+R, F12 등 개발자 도구 및 새로고침 방지
+        if (
+            e.key === 'F5' || 
+            (e.ctrlKey && e.key === 'r') || 
+            e.key === 'F12'
+        ) {
+            e.preventDefault();
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+
   useEffect(() => {
     if (isCartOpen) {
       cartEndRef.current?.scrollIntoView({ behavior: "smooth" });
