@@ -28,7 +28,8 @@ export default function TableNumberModal({ onConfirm, onCancel }: Props) {
         // 1. 너비 확대: w-[480px] -> w-[600px] (옆으로 넓혀서 시원하게)
         // 2. 패딩 확대: p-5 -> p-8
         // 3. 둥글기 확대: rounded-3xl
-        className="bg-white w-[600px] p-8 rounded-[2rem] shadow-2xl flex flex-col items-center relative"
+      // ✨ [수정] 너비: w-[600px] -> w-[90%] (화면 넘어감 방지)
+        className="bg-white w-[90%] p-6 rounded-[2rem] shadow-2xl flex flex-col items-center relative"
       >
         {/* ✨ 제목 확대: text-2xl -> text-4xl */}
         <h2 className="text-4xl font-black text-gray-900 mb-4">Table Service</h2>
