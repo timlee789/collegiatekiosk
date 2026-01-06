@@ -374,11 +374,18 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
             />
             
             <motion.div
-              initial={{ y: "100%" }} 
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
+              // ✨ [수정] 애니메이션: 위에서 아래로 살짝 내려옴
+              initial={{ opacity: 0, y: -50 }} 
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -50 }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="fixed bottom-0 left-0 w-full h-[70%] bg-white z-[60] shadow-2xl flex flex-col rounded-t-[2rem]"
+              
+              // ✨ [수정] 위치 변경
+              // 1. fixed bottom-0 -> fixed top-28 (화면 상단 배치)
+              // 2. h-[70%] -> h-auto max-h-[75%] (내용물만큼만, 너무 길지 않게)
+              // 3. w-full -> w-[95%] left-[2.5%] (좌우 여백 줘서 붕 떠있는 느낌)
+              // 4. rounded-t-[2rem] -> rounded-[2.5rem] (전체 둥글게)
+              className="fixed top-28 left-[2.5%] w-[95%] h-[75%] bg-white z-[60] shadow-2xl flex flex-col rounded-[2.5rem] overflow-hidden border border-gray-200"
               onClick={(e) => e.stopPropagation()} 
             >
               <div className="p-6 bg-gray-900 text-white shadow-md flex justify-between items-center shrink-0 rounded-t-[2rem]">

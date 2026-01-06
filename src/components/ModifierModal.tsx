@@ -86,14 +86,17 @@ export default function ModifierModal({ item, modifiersObj, onClose, onConfirm }
 
     return (
         // ✨ 외부 배경 터치 시 닫기 (onClick={onClose})
+       // ✨ [수정] 정렬 변경
+        // items-center (중앙) -> items-start (상단)
+        // pt-28 (상단 헤더 공간만큼 띄우기)
         <div 
-            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center pt-28 p-4 backdrop-blur-sm"
             onClick={onClose}
         >
             {/* ✨ 내부 모달: 높이 자동 조절 (max-h-[85vh]), 너비 축소 (w-[90%]) */}
             <div 
-                onClick={(e) => e.stopPropagation()} // 내부 클릭 시 닫힘 방지
-                className="bg-white rounded-[2rem] w-[90%] h-auto max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200"
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-[2rem] w-[90%] h-auto max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200"
             >
 
                 {/* 헤더 */}

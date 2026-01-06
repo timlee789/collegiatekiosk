@@ -20,7 +20,8 @@ export default function TableNumberModal({ onConfirm, onCancel }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    // ✨ [수정] 중앙 정렬 -> 상단 정렬 (pt-32로 조금 더 아래로)
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 bg-black/60 backdrop-blur-sm">
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
