@@ -220,12 +220,13 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
   };
 
   // ------------------------------------------------------------------
-  // ✨ [수정] Table Number Confirm 시 카트 닫기 로직 추가
+  // Table Number Confirm
   // ------------------------------------------------------------------
   const handleTableNumberConfirm = (tableNum: string) => { 
       setCurrentTableNumber(tableNum); 
       setShowTableModal(false); 
-      setIsCartOpen(false); // ✨ [Fix] 여기서 카트 모달을 닫아야 다음 모달이 보입니다!
+      // 이미 onClick에서 닫았지만 안전장치로 놔둠
+      setIsCartOpen(false); 
       setShowOrderTypeModal(true); 
   };
 
@@ -289,10 +290,6 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
                 key={cat.id || index}
                 onClick={() => setActiveTab(cat.name)}
                 // ✨ [재수정 사항] 적당한 중간 사이즈
-                // 1. 패딩: px-10 -> px-6 (좌우 공간 절약)
-                // 2. 높이: h-24 -> h-18 (너무 크지 않게, 약 72px)
-                // 3. 글씨: text-3xl -> text-2xl (가독성 좋음)
-                // 4. 테두리: border-4 -> border-3
                 className={`flex-shrink-0 px-6 h-18 rounded-full text-2xl font-extrabold transition-all shadow-sm border-[3px] whitespace-nowrap
                   ${activeTab === cat.name 
                     ? 'bg-red-600 text-white border-red-600 shadow-md' 
@@ -330,11 +327,6 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
       {/* ------------------------------------------------------- */}
       <button 
         onClick={() => setIsCartOpen(true)}
-        // ✨ [수정 사항]
-        // 1. 위치: top-6 right-4 -> top-8 right-6 (여백 확보)
-        // 2. 크기: w-20 h-20 -> w-32 h-32 (대폭 확대)
-        // 3. 테두리: border-2 -> border-4 (더 두껍게)
-        // 4. 둥글기: rounded-2xl -> rounded-[2.5rem]
         className="absolute top-8 right-6 z-50 bg-white border-4 border-gray-100 p-4 rounded-[2.5rem] shadow-2xl active:scale-95 transition-all flex flex-col items-center justify-center gap-2 w-32 h-32"
       >
         <div className="relative">
@@ -345,8 +337,6 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
           
           {cart.length > 0 && (
             // ✨ 뱃지 크기 및 글씨 확대
-            // w-6 h-6 -> w-10 h-10
-            // text-xs -> text-xl
             <span className="absolute -top-3 -right-3 bg-red-600 text-white text-xl font-black w-10 h-10 flex items-center justify-center rounded-full border-4 border-white shadow-md">
               {cart.length}
             </span>
@@ -354,7 +344,7 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
         </div>
         
         {cart.length > 0 && (
-            // ✨ 가격 글씨 확대: text-xs -> text-xl
+            // ✨ 가격 글씨 확대
             <span className="font-black text-gray-900 text-xl tracking-tight">
                 ${grandTotal.toFixed(0)}
             </span>
@@ -381,10 +371,6 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
               
               // ✨ [수정] 위치 변경
-              // 1. fixed bottom-0 -> fixed top-28 (화면 상단 배치)
-              // 2. h-[70%] -> h-auto max-h-[75%] (내용물만큼만, 너무 길지 않게)
-              // 3. w-full -> w-[95%] left-[2.5%] (좌우 여백 줘서 붕 떠있는 느낌)
-              // 4. rounded-t-[2rem] -> rounded-[2.5rem] (전체 둥글게)
               className="fixed top-28 left-[2.5%] w-[95%] h-[75%] bg-white z-[60] shadow-2xl flex flex-col rounded-[2.5rem] overflow-hidden border border-gray-200"
               onClick={(e) => e.stopPropagation()} 
             >
@@ -460,7 +446,17 @@ export default function KioskMain({ categories, items, modifiersObj }: Props) {
                     <span className="text-3xl font-bold text-gray-800">Total</span>
                     <span className="text-5xl font-black text-red-600">${grandTotal.toFixed(2)}</span>
                   </div>
-                  <button className="w-full h-24 bg-green-600 text-white text-4xl font-black rounded-3xl hover:bg-green-700 shadow-xl active:scale-95 transition-all" onClick={() => setShowTableModal(true)}>Pay Now</button>
+                  
+                  {/* ✨ [수정됨] Pay Now 클릭 시 카트 닫기 로직 추가 */}
+                  <button 
+                    className="w-full h-24 bg-green-600 text-white text-4xl font-black rounded-3xl hover:bg-green-700 shadow-xl active:scale-95 transition-all" 
+                    onClick={() => {
+                      setIsCartOpen(false);  // 1. 카트 닫기 (중요!)
+                      setShowTableModal(true); // 2. 테이블 번호 모달 열기
+                    }}
+                  >
+                    Pay Now
+                  </button>
                 </div>
               )}
             </motion.div>
